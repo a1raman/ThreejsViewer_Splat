@@ -1,14 +1,16 @@
 # 3D Gaussian splatting for Three.js
 
+## Reference
+- https://github.com/mkkellogg/GaussianSplats3D
 
 ## Controls
 Mouse
 - Left click to set the focal point
-- Left click and drag to orbit around the focal point
-- Right click and drag to pan the camera and focal point
+- Left click and drag to camera around the focal point
   
 Keyboard
 - `C` Toggles the mesh cursor, showing the intersection point of a mouse-projected ray and the splat mesh
+- $\color{#DD6565}(ADD) After `C` Keydown and Left clicking at any point of view, you will move to the closest graph camera position$
 
 - `I` Toggles an info panel that displays debugging info:
   - Camera position
