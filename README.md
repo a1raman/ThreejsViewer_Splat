@@ -3,10 +3,10 @@
 ## Reference
 - https://github.com/mkkellogg/GaussianSplats3D
 
-## <span style="color:red">(ADD) Limit camera movement
-- <span style="color:red"> Connect the captured locations(real world camera)(clustered and extracted representative values) to the graph. (This is not written in this code.)</span>
-- <span style="color:red"> The camera movement can only move along the graph. (The width scale of the graph can be changed.)</span>
-- <span style="color:red"> This method can prevent unwanted movement inside the point cloud-based splat model.</span>
+##🚨 **(ADD)**  Limit camera movement
+- 🚨 **(ADD)** Connect the captured locations(real world camera)(clustered and extracted representative values) to the graph. (This is not written in this code.)
+- 🚨 **(ADD)** The camera movement can only move along the graph. (The width scale of the graph can be changed.)
+- 🚨 **(ADD)**  This method can prevent unwanted movement inside the point cloud-based splat model.
 
 ## Controls
 Mouse
@@ -15,8 +15,8 @@ Mouse
   
 Keyboard
 - `C` Toggles the mesh cursor, showing the intersection point of a mouse-projected ray and the splat mesh
-- <span style="color:red">(ADD) After `C` Keydown and Left clicking at any point of view, you will move to the closest graph camera position </span>
-- <span style="color:red">`WASD` Move the camera position </span>
+- 🚨 **(ADD)**  After `C` Keydown and Left clicking at any point of view, you will move to the closest graph camera position 
+- 🚨 **(ADD)** `WASD` Move the camera position
   
 - `I` Toggles an info panel that displays debugging info:
   - Camera position
