@@ -3,7 +3,8 @@
 ## Reference
 - https://github.com/mkkellogg/GaussianSplats3D
 
-##🚨 **(ADD)**  Limit camera movement
+## Add Features
+🚨 **(ADD)**  Limit camera movement
 - 🚨 **(ADD)** Connect the captured locations(real world camera)(clustered and extracted representative values) to the graph. (This is not written in this code.)
 - 🚨 **(ADD)** The camera movement can only move along the graph. (The width scale of the graph can be changed.)
 - 🚨 **(ADD)**  This method can prevent unwanted movement inside the point cloud-based splat model.
