@@ -266,12 +266,12 @@ export class Viewer {
         this.graphName = '';
 
         if (!this.dropInMode) this.init();
-        this.initControls();
+        //this.initControls();
 
     }
-    async initControls() {
-        this.controls = await createOrbitControls(this.camera, this.domElement, this);  // Viewer 인스턴스를 전달
-    }
+    // async initControls() {
+    //     this.controls = await createOrbitControls(this.camera, this.domElement, this);  // Viewer 인스턴스를 전달
+    // }
 
     createSplatMesh() {
         this.splatMesh = new SplatMesh(this.splatRenderMode, this.dynamicScene, this.enableOptionalEffects,
