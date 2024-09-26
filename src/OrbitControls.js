@@ -1787,53 +1787,91 @@ class OrbitControls extends EventDispatcher {
     async raypoint(originCursor) {
         // origin 값이 전달되었는지 확인
         if (originCursor) {
-            console.log("Raypoint called with origin:", originCursor);
+            //console.log("Raypoint called with origin:", originCursor);
             this.originCursor = originCursor;
             // 여기에 origin 값을 사용한 추가 로직을 구현
         } else {
             console.error("Origin value not provided");
         }
     }
-    // 다익스트라
-    calculateShortestPath(graphConnections, graphPoints, startIdx, targetIdx) {
-        const distances = Array(graphPoints.length).fill(Infinity);
-        const previousNodes = Array(graphPoints.length).fill(null);
-        const visited = new Set();
-        const queue = [];
-    
-        // 시작점의 거리와 초기화
-        distances[startIdx] = 0;
-        queue.push({ index: startIdx, distance: 0 });
+    // BFS를 이용한 최단 경로 찾기 함수
+    calculateShortestPathBFS(graphConnections, graphPoints, startIdx, targetIdx) {
+        const queue = [startIdx]; // 탐색할 노드를 담는 큐
+        const cameFrom = new Map(); // 경로 추적용 맵
+        const visited = new Set(); // 방문한 노드 기록
+        visited.add(startIdx); // 시작 노드 방문 기록
 
         while (queue.length > 0) {
-            // 우선순위 큐처럼 사용
-            const { index: currentIdx } = queue.shift();
-            if (visited.has(currentIdx)) continue;
-            visited.add(currentIdx);
-    
+            const currentIdx = queue.shift(); // 큐에서 첫 번째 노드를 꺼냄
+
+            // 목표 노드에 도달한 경우 경로 재구성
+            if (currentIdx === targetIdx) {
+                return this.reconstructPath(cameFrom, currentIdx);
+            }
+
             // 현재 노드와 연결된 모든 이웃을 확인
             graphConnections.forEach(({ from, to }) => {
-                if (from === currentIdx || to === currentIdx) {
-                    const neighborIdx = (from === currentIdx) ? to : from;
-                    const distance = graphPoints[currentIdx].distanceTo(graphPoints[neighborIdx]);
-    
-                    // 더 짧은 경로를 찾으면 업데이트
-                    if (distances[currentIdx] + distance < distances[neighborIdx]) {
-                        distances[neighborIdx] = distances[currentIdx] + distance;
-                        previousNodes[neighborIdx] = currentIdx;
-                        queue.push({ index: neighborIdx, distance: distances[neighborIdx] });
-                    }
+                const neighborIdx = (from === currentIdx) ? to : (to === currentIdx ? from : null);
+                if (neighborIdx !== null && !visited.has(neighborIdx)) {
+                    visited.add(neighborIdx); // 방문 기록
+                    queue.push(neighborIdx); // 큐에 추가
+                    cameFrom.set(neighborIdx, currentIdx); // 경로 추적
                 }
             });
         }
-    
-        // 목표점에서 시작하여 역으로 경로를 추적
-        const path = [];
-        for (let at = targetIdx; at !== null; at = previousNodes[at]) {
-            path.push(at);
-        }
-        return path.reverse(); // 경로는 역순으로 저장되므로 뒤집어 반환
+
+        return []; // 목표 노드에 도달할 수 없는 경우 빈 배열 반환
     }
+
+    // 경로 재구성 함수
+    reconstructPath(cameFrom, currentIdx) {
+        const totalPath = [currentIdx];
+        while (cameFrom.has(currentIdx)) {
+            currentIdx = cameFrom.get(currentIdx);
+            totalPath.push(currentIdx);
+        }
+        return totalPath.reverse(); // 경로를 역순으로 반환
+    }
+    // // 다익스트라
+    // calculateShortestPath(graphConnections, graphPoints, startIdx, targetIdx) {
+    //     const distances = Array(graphPoints.length).fill(Infinity);
+    //     const previousNodes = Array(graphPoints.length).fill(null);
+    //     const visited = new Set();
+    //     const queue = [];
+    
+    //     // 시작점의 거리와 초기화
+    //     distances[startIdx] = 0;
+    //     queue.push({ index: startIdx, distance: 0 });
+
+    //     while (queue.length > 0) {
+    //         // 우선순위 큐처럼 사용
+    //         const { index: currentIdx } = queue.shift();
+    //         if (visited.has(currentIdx)) continue;
+    //         visited.add(currentIdx);
+    
+    //         // 현재 노드와 연결된 모든 이웃을 확인
+    //         graphConnections.forEach(({ from, to }) => {
+    //             if (from === currentIdx || to === currentIdx) {
+    //                 const neighborIdx = (from === currentIdx) ? to : from;
+    //                 const distance = graphPoints[currentIdx].distanceTo(graphPoints[neighborIdx]);
+    
+    //                 // 더 짧은 경로를 찾으면 업데이트
+    //                 if (distances[currentIdx] + distance < distances[neighborIdx]) {
+    //                     distances[neighborIdx] = distances[currentIdx] + distance;
+    //                     previousNodes[neighborIdx] = currentIdx;
+    //                     queue.push({ index: neighborIdx, distance: distances[neighborIdx] });
+    //                 }
+    //             }
+    //         });
+    //     }
+    
+    //     // 목표점에서 시작하여 역으로 경로를 추적
+    //     const path = [];
+    //     for (let at = targetIdx; at !== null; at = previousNodes[at]) {
+    //         path.push(at);
+    //     }
+    //     return path.reverse(); // 경로는 역순으로 저장되므로 뒤집어 반환
+    // }
 
     // ray로 찍은 위치와 가장 가까운 그래프포인트 찾기
     moveCameraToClosestGraphPoint() {
@@ -1868,7 +1906,7 @@ class OrbitControls extends EventDispatcher {
         });
         if (closestPointIndex !== null && currentClosestPointIndex !== null) {
             // 최단 경로 계산 및 카메라 이동 시작
-            const path = this.calculateShortestPath(this.graphConnections, this.graphPoints, currentClosestPointIndex, closestPointIndex);
+            const path = this.calculateShortestPathBFS(this.graphConnections, this.graphPoints, currentClosestPointIndex, closestPointIndex);
             this.animateCameraAlongPath(path);
         } else {
             console.error("가까운 포인트를 찾을 수 없습니다.");
@@ -1928,7 +1966,7 @@ class OrbitControls extends EventDispatcher {
 }
 // OrbitControls 생성 및 초기화 함수
 async function createOrbitControls(camera, domElement, viewer) {
-    const controls = new OrbitControls(camera, domElement, viewer);
+    const controls = new OrbitControls(camera, domElement);
     //await controls.loadBoundaryPoints(boundaryFilePath);
     //graphConnections = await controls.loadGraphCam(graphCamFilePath);
     //graphPoints = await controls.loadGraph(graphFilePath);
