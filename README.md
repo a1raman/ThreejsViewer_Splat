@@ -16,7 +16,7 @@ Mouse
   
 Keyboard
 - `C` Toggles the mesh cursor, showing the intersection point of a mouse-projected ray and the splat mesh
-- 🚨 **(ADD)**  After `C` Keydown and Left clicking at any point of view, you will move to the closest graph camera position 
+- 🚨 **(ADD)**  After `C` Keydown and Left clicking at any point of view, you will move to the closest graph camera position (Set to automatically move along the graph's shortest path (Dijkstra))
 - 🚨 **(ADD)** `WASD` Move the camera position
   
 - `I` Toggles an info panel that displays debugging info:
