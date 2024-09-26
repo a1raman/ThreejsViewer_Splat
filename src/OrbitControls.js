@@ -1030,20 +1030,42 @@ class OrbitControls extends EventDispatcher {
 
             return distance <= roadWidth / 2;
         }
-        // animate 메서드도 생성자 내부에 정의하고 this에 바인딩
-        this.animate = () => {
-            if (this.clock) {
-                const deltaTime = this.clock.getDelta();
-                this.updateCameraMovement(deltaTime);
-            }
-            requestAnimationFrame(this.animate);
-        };
+        // // animate 메서드도 생성자 내부에 정의하고 this에 바인딩
+        // this.animate = () => {
+        //     if (this.clock) {
+        //         const deltaTime = this.clock.getDelta();
+        //         this.updateCameraMovement(deltaTime);
+        //     }
+        //     requestAnimationFrame(this.animate);
+        // };
 
         // 초기화 및 애니메이션 시작
         this.loadGraphAndPaths().then(() => {
             this.animate();
         });
-
+        this.animate = () => {
+            if (this.clock) {
+                const deltaTime = this.clock.getDelta();
+                this.updateCameraMovement(deltaTime); // 기존 카메라 움직임 처리
+        
+                // isMoving이 true일 때 카메라 이동 처리
+                if (this.isMoving) {
+                    const elapsed = (performance.now() - this.startTime) / 1000; // 경과 시간 (초 단위)
+                    const duration = 1.5; // 카메라 이동 지속 시간
+                    const t = Math.min(elapsed / duration, 1); // 0에서 1 사이의 비율 계산
+        
+                    // 카메라의 위치를 점진적으로 목표 위치로 이동
+                    this.object.position.lerpVectors(this.startPosition, this.targetPosition, t);
+        
+                    if (t >= 1) {
+                        this.isMoving = false; // 이동 완료
+                        console.log("카메라 이동 완료!");
+                    }
+                }
+            }
+        
+            requestAnimationFrame(this.animate); // 애니메이션 프레임 요청
+        };
 
         // function handleKeyDown( event ) {
         //     let needsUpdate = false;
@@ -1673,16 +1695,22 @@ class OrbitControls extends EventDispatcher {
     
     async loadGraphAndPaths() {
         try {
-            const graphConnections = await this.loadGraph('assets/data/cafe/cafe_graph.txt');
+            this.graphConnections = await this.loadGraph('assets/data/cafe/cafe_graph.txt');
             this.graphPoints = await this.loadGraphCam('assets/data/cafe/cafe_centers.txt');
-    
+            
+            // graphConnections가 유효한지 확인
+            if (!this.graphConnections || this.graphConnections.length === 0) {
+                console.error("Graph Connections are empty or undefined");
+                return;
+            }
+
             // graphPoints 배열이 정상적으로 로드되었는지 확인
             if (!this.graphPoints || this.graphPoints.length === 0) {
                 console.error("Graph Points are empty or undefined");
                 return;
             }
         
-            this.roads = this.createRoads(graphConnections, this.graphPoints);
+            this.roads = this.createRoads(this.graphConnections, this.graphPoints);
         
             this.isDataLoaded = true;
             this.animate();
@@ -1694,7 +1722,7 @@ class OrbitControls extends EventDispatcher {
         return connections.map(conn => {
             const start = points[conn.from];
             const end = points[conn.to];
-    
+
             // 유효성 검사: start 또는 end가 undefined일 경우 로그 출력 후 null 반환
             if (!start || !end) {
                 console.error(`Invalid connection: start or end is undefined for connection from ${conn.from} to ${conn.to}`);
@@ -1732,15 +1760,28 @@ class OrbitControls extends EventDispatcher {
         try {
             const response = await fetch(filePath);
             const text = await response.text();
-            const connections = text.split('\n').map(line => {
-                const [from, to] = line.split(' ').map(Number); // 시작점과 끝점을 나타내는 인덱스
-                return { from, to };
-            });
-
+    
+            const connections = text.split('\n').map((line, index) => {
+                // 공백 제거 및 빈 줄 체크
+                line = line.trim();
+                if (line === '') return null; // 빈 줄이면 null 반환
+    
+                const parts = line.split(' ').map(Number); // 공백으로 나눈 후 숫자로 변환
+                
+                // 유효성 검사: parts 배열이 길이 2가 아니거나, NaN이 포함된 경우 건너뜀
+                if (parts.length !== 2 || isNaN(parts[0]) || isNaN(parts[1])) {
+                    console.warn(`Invalid line skipped at index ${index}: ${line}`); // 잘못된 줄을 건너뜀
+                    return null; 
+                }
+    
+                return { from: parts[0], to: parts[1] };
+            }).filter(conn => conn !== null); // 유효하지 않은 연결을 필터링
+    
             //console.log('Loaded graph connections:', connections); // 로그 출력
             return connections;
         } catch (error) {
             console.error('Error loading graph:', error);
+            return null;
         }
     }
     async raypoint(originCursor) {
@@ -1753,6 +1794,47 @@ class OrbitControls extends EventDispatcher {
             console.error("Origin value not provided");
         }
     }
+    // 다익스트라
+    calculateShortestPath(graphConnections, graphPoints, startIdx, targetIdx) {
+        const distances = Array(graphPoints.length).fill(Infinity);
+        const previousNodes = Array(graphPoints.length).fill(null);
+        const visited = new Set();
+        const queue = [];
+    
+        // 시작점의 거리와 초기화
+        distances[startIdx] = 0;
+        queue.push({ index: startIdx, distance: 0 });
+
+        while (queue.length > 0) {
+            // 우선순위 큐처럼 사용
+            const { index: currentIdx } = queue.shift();
+            if (visited.has(currentIdx)) continue;
+            visited.add(currentIdx);
+    
+            // 현재 노드와 연결된 모든 이웃을 확인
+            graphConnections.forEach(({ from, to }) => {
+                if (from === currentIdx || to === currentIdx) {
+                    const neighborIdx = (from === currentIdx) ? to : from;
+                    const distance = graphPoints[currentIdx].distanceTo(graphPoints[neighborIdx]);
+    
+                    // 더 짧은 경로를 찾으면 업데이트
+                    if (distances[currentIdx] + distance < distances[neighborIdx]) {
+                        distances[neighborIdx] = distances[currentIdx] + distance;
+                        previousNodes[neighborIdx] = currentIdx;
+                        queue.push({ index: neighborIdx, distance: distances[neighborIdx] });
+                    }
+                }
+            });
+        }
+    
+        // 목표점에서 시작하여 역으로 경로를 추적
+        const path = [];
+        for (let at = targetIdx; at !== null; at = previousNodes[at]) {
+            path.push(at);
+        }
+        return path.reverse(); // 경로는 역순으로 저장되므로 뒤집어 반환
+    }
+
     // ray로 찍은 위치와 가장 가까운 그래프포인트 찾기
     moveCameraToClosestGraphPoint() {
         if (!this.originCursor || !this.graphPoints) {
@@ -1760,35 +1842,88 @@ class OrbitControls extends EventDispatcher {
             return;
         }
     
-        let closestPoint = null;
+        //let closestPoint = null;
+        let closestPointIndex = null;
         let closestDistance = Infinity;
     
         // 가장 가까운 포인트 찾기
-        this.graphPoints.forEach(point => {
+        this.graphPoints.forEach((point, idx) => {
             const distance = point.distanceTo(this.originCursor); // originCursor와의 거리 계산
             if (distance < closestDistance) {
                 closestDistance = distance;
-                closestPoint = point;
+                closestPointIndex = idx;
+                //closestPoint = point;
             }
         });
-    
-        // 가장 가까운 포인트로 카메라 이동
-        if (closestPoint) {
-            console.log("가장 가까운 포인트:", closestPoint);
-            this.object.position.set(closestPoint.x, closestPoint.y, closestPoint.z);
+
+        // 현재 카메라 위치에서 가장 가까운 포인트 찾기
+        let currentClosestPointIndex = null;
+        let currentClosestDistance = Infinity;
+        this.graphPoints.forEach((point, idx) => {
+            const distance = point.distanceTo(this.object.position);
+            if (distance < currentClosestDistance) {
+                currentClosestDistance = distance;
+                currentClosestPointIndex = idx;
+            }
+        });
+        if (closestPointIndex !== null && currentClosestPointIndex !== null) {
+            // 최단 경로 계산 및 카메라 이동 시작
+            const path = this.calculateShortestPath(this.graphConnections, this.graphPoints, currentClosestPointIndex, closestPointIndex);
+            this.animateCameraAlongPath(path);
         } else {
             console.error("가까운 포인트를 찾을 수 없습니다.");
         }
-
+        // // 가장 가까운 포인트로 카메라 이동
+        // if (closestPoint) {
+        //     console.log("가장 가까운 포인트:", closestPoint);
+        //     this.animateCameraToPoint(closestPoint); 
+        //     //this.object.position.set(closestPoint.x, closestPoint.y, closestPoint.z);
+        // } else {
+        //     console.error("가까운 포인트를 찾을 수 없습니다.");
+        // }
+    }
+    // 카메라를 최단 경로로 이동시키는 함수
+    animateCameraAlongPath(path) {
+        if (path.length === 0) return;
         
-    }
+        let index = 0;
+        const duration = 1.5; // 각 구간 이동 시간 (초 단위)
+        const moveToNextPoint = () => {
+            if (index >= path.length - 1) {
+                console.log("카메라 경로 이동 완료");
+                return;
+            }
 
-    animate() {
-        const deltaTime = this.clock.getDelta();
-        this.update(deltaTime);
-        requestAnimationFrame(() => this.animate());
+            const startPoint = this.graphPoints[path[index]];
+            const endPoint = this.graphPoints[path[index + 1]];
+            const startTime = performance.now();
 
+            const animate = (time) => {
+                const elapsed = (time - startTime) / 1000;
+                const t = Math.min(elapsed / duration, 1);
+
+                // lerp를 사용하여 카메라 위치 보간
+                this.object.position.lerpVectors(startPoint, endPoint, t);
+
+                if (t < 1) {
+                    requestAnimationFrame(animate);
+                } else {
+                    index++;
+                    moveToNextPoint(); // 다음 포인트로 이동
+                }
+            };
+
+            requestAnimationFrame(animate); // 애니메이션 시작
+        };
+
+        moveToNextPoint(); // 첫 번째 이동 시작
     }
+    // animateCameraToPoint(targetPoint) {
+    //     this.startPosition = this.object.position.clone(); // 현재 카메라 위치
+    //     this.targetPosition = targetPoint.clone(); // 목표 위치
+    //     this.startTime = performance.now(); // 애니메이션 시작 시간
+    //     this.isMoving = true; // 카메라 이동 중임을 표시
+    // }
 
 }
 // OrbitControls 생성 및 초기화 함수
