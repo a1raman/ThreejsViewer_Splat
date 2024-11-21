@@ -102,10 +102,10 @@ export class Viewer {
         // https://web.dev/articles/cross-origin-isolation-guide
         // If enabled, it requires specific CORS headers to be present in the response from the server that is sent when
         // loading the application. More information is available in the README.
-        if (options.sharedMemoryForWorkers === undefined || options.sharedMemoryForWorkers === null) options.sharedMemoryForWorkers = true;
+        if (options.sharedMemoryForWorkers === undefined || options.sharedMemoryForWorkers === null) options.sharedMemoryForWorkers = false;
         this.sharedMemoryForWorkers = options.sharedMemoryForWorkers;
 
-        // if 'dynamicScene' is true, it tells the viewer to assume scene elements are not stationary or that the number of splats in the
+        // if 'dynamicScene' is true, it tells the viewer to assume scene elements are not stationary or that the number of splats in t he
         // scene may change. This prevents optimizations that depend on a static scene from being made. Additionally, if 'dynamicScene' is
         // true it tells the splat mesh to not apply scene tranforms to splat data that is returned by functions like
         // SplatMesh.getSplatCenter() by default.
@@ -264,6 +264,9 @@ export class Viewer {
         this.clustername = '';
         this.graphCamName = '';
         this.graphName = '';
+        
+        this.downCheck = false; //로딩체크
+        this.events = {}; // 이벤트 저장소
 
         if (!this.dropInMode) this.init();
         //this.initControls();
@@ -378,12 +381,12 @@ export class Viewer {
     }
 
 
-    setBoundName(name){
-        this.clustername = name;
-        this.setupControls()
-    }
+    // setBoundName(name){
+    //     this.clustername = name;
+    //     this.setupControls()
+    // }
 
-    setGraphCamName(name){
+    setBoundName(name){ //setGraphCamName
         this.graphCamName = name;
         this.setupControls()
     }
@@ -394,19 +397,19 @@ export class Viewer {
     async setupControls() {
         if (this.useBuiltInControls && this.webXRMode === WebXRMode.None) {
             if (!this.usingExternalCamera) {
-                this.perspectiveControls = await createOrbitControls(this.camera, this.renderer.domElement, this);
+                this.perspectiveControls = await createOrbitControls(this.camera, this.renderer.domElement, this.graphCamName, this.graphName, this);
                 // this.perspectiveControls = await createOrbitControls(this.camera, this.renderer.domElement, 
                 //     this.clustername, this.graphCamName, this.graphName, this);
                 //this.perspectiveControls.visualizeOBB(this.threeScene);
                 //this.perspectiveControls = new OrbitControls(this.perspectiveCamera, this.renderer.domElement);
-                this.orthographicControls = new OrbitControls(this.orthographicCamera, this.renderer.domElement, this);
+                this.orthographicControls = new OrbitControls(this.orthographicCamera, this.renderer.domElement, this.graphCamName, this.graphName, this);
                 // this.orthographicControls = new OrbitControls(this.orthographicCamera, this.renderer.domElement, 
                 //     this.clustername, this.graphCamName, this.graphName);
             } else {
                 if (this.camera.isOrthographicCamera) {
-                    this.orthographicControls = new OrbitControls(this.camera, this.renderer.domElement, this);
+                    this.orthographicControls = new OrbitControls(this.camera, this.renderer.domElement, this.graphCamName, this.graphName, this);
                 } else {
-                    this.perspectiveControls = await createOrbitControls(this.camera, this.renderer.domElement, this);
+                    this.perspectiveControls = await createOrbitControls(this.camera, this.renderer.domElement, this.graphCamName, this.graphName, this);
                     // this.perspectiveControls = await createOrbitControls(this.camera, this.renderer.domElement, this, 
                     //     this.clustername, this.graphCamName, this.graphName);
                     //this.perspectiveControls.visualizeOBB(this.threeScene);
@@ -523,6 +526,7 @@ export class Viewer {
 
     }();
 
+
     onMouseMove(mouse) {
         this.mousePosition.set(mouse.offsetX, mouse.offsetY);
     }
@@ -565,7 +569,6 @@ export class Viewer {
                 this.raycaster.setFromCameraAndScreenPosition(this.camera, this.mousePosition, renderDimensions);
                 this.raycaster.intersectSplatMesh(this.splatMesh, outHits);
                 if (outHits.length > 0) {
-                    console.log("ray");
                     const hit = outHits[0];
                     const intersectionPoint = hit.origin;
                     toNewFocalPoint.copy(intersectionPoint).sub(this.camera.position);
@@ -710,7 +713,9 @@ export class Viewer {
     clearSplatSceneDownloadAndBuildPromise() {
         this.splatSceneDownloadAndBuildPromise = null;
     }
-
+    // getDownCheck() {
+    //     return this.downCheck; // downCheck 값을 반환
+    // }
     /**
      * Add a splat scene to the viewer and display any loading UI if appropriate.
      * @param {string} path Path to splat scene to be loaded
@@ -733,7 +738,18 @@ export class Viewer {
      * @return {AbortablePromise}
      */
 
+    on(event, listener) {
+        if (!this.events[event]) {
+            this.events[event] = [];
+        }
+        this.events[event].push(listener);
+    }
 
+    emit(event, ...args) {
+        if (this.events[event]) {
+            this.events[event].forEach(listener => listener(...args));
+        }
+    }
 
 
     addSplatScene(path, options = {}) {
@@ -754,11 +770,10 @@ export class Viewer {
         const format = (options.format !== undefined && options.format !== null) ? options.format : sceneFormatFromPath(path);
         const progressiveLoad = Viewer.isProgressivelyLoadable(format) && options.progressiveLoad;
         const showLoadingUI = (options.showLoadingUI !== undefined && options.showLoadingUI !== null) ? options.showLoadingUI : true;
-
         let loadingUITaskId = null;
         if (showLoadingUI) {
             this.loadingSpinner.removeAllTasks();
-            loadingUITaskId = this.loadingSpinner.addTask('다운로드 중...');
+            loadingUITaskId = this.loadingSpinner.addTask('다운로드 중');
         }
         const hideLoadingUI = () => {
             this.loadingProgressBar.hide();
@@ -772,32 +787,34 @@ export class Viewer {
                         this.loadingSpinner.setMessageForTask(loadingUITaskId, '다운로드 완료!');
                     } else {
                         if (progressiveLoad) {
-                            this.loadingSpinner.setMessageForTask(loadingUITaskId, '가게정보 다운로드 중...');
+                            this.loadingSpinner.setMessageForTask(loadingUITaskId, '실내 불러오는 중');
                         } else {
                             const suffix = percentCompleteLabel ? `: ${percentCompleteLabel}` : `...`;
                             this.loadingSpinner.setMessageForTask(loadingUITaskId, `Downloading${suffix}`);
                         }
                     }
                 } else if (loaderStatus === LoaderStatus.Processing) {
-                    this.loadingSpinner.setMessageForTask(loadingUITaskId, '실내 불러오는 중...');
+                    this.loadingSpinner.setMessageForTask(loadingUITaskId, '실내 불러오는 중');
                 }
             }
         };
 
-        let downloadDone = false;
         let downloadedPercentage = 0;
         const splatBuffersAddedUIUpdate = (firstBuild, finalBuild) => {
             if (showLoadingUI) {
                 if (firstBuild && progressiveLoad || finalBuild && !progressiveLoad) {
-                    this.loadingSpinner.removeTask(loadingUITaskId);
-                    if (!finalBuild && !downloadDone) this.loadingProgressBar.show();
+                    //this.loadingSpinner.removeTask(loadingUITaskId);
+                    //if (!finalBuild && !downloadDone) this.loadingProgressBar.show();
                 }
                 if (progressiveLoad) {
                     if (finalBuild) {
-                        downloadDone = true;
-                        this.loadingProgressBar.hide();
+                        this.loadingSpinner.removeTask(loadingUITaskId);
+                        this.downCheck = true;
+                        this.emit('sceneLoaded'); // 커스텀 이벤트 발생
+                        //this.addImageUI();
+                        //this.loadingProgressBar.hide();
                     } else {
-                        this.loadingProgressBar.setProgress(downloadedPercentage);
+                        //this.loadingProgressBar.setProgress(downloadedPercentage);
                     }
                 }
             }
@@ -828,6 +845,11 @@ export class Viewer {
         const loadFunc = progressiveLoad ? this.downloadAndBuildSingleSplatSceneProgressiveLoad.bind(this) :
                                            this.downloadAndBuildSingleSplatSceneStandardLoad.bind(this);
         return loadFunc(path, format, options.splatAlphaRemovalThreshold, buildSection.bind(this), onProgress, hideLoadingUI.bind(this));
+    }
+    getDownCheck(){
+        this.downCheck = true; // 다운로드 완료 시 downCheck 값을 true로 설정
+        console.log(this.downCheck)
+        return this.downCheck;
     }
 
     addImageUI(mode) {
@@ -1207,7 +1229,7 @@ export class Viewer {
 
             return new Promise((resolve) => {
                 if (showLoadingUI) {
-                    splatProcessingTaskId = this.loadingSpinner.addTask('실내 불러오는 중...');
+                    splatProcessingTaskId = this.loadingSpinner.addTask('실내 불러오는 중');
                 }
                 delayedExecute(() => {
                     if (this.isDisposingOrDisposed()) {
@@ -1828,12 +1850,8 @@ export class Viewer {
                 this.raycaster.setFromCameraAndScreenPosition(this.camera, this.mousePosition, renderDimensions);
                 this.raycaster.intersectSplatMesh(this.splatMesh, outHits);
                 if (outHits.length > 0) {
-                    const originCursor = outHits[0].origin;
                     this.sceneHelper.setMeshCursorVisibility(true);
                     this.sceneHelper.positionAndOrientMeshCursor(outHits[0].origin, this.camera);
-
-                    this.someFunctionThatUsesRaypoint(originCursor);
-                    //console.log(outHits[0].origin);
                 } else {
                     this.sceneHelper.setMeshCursorVisibility(false);
                 }
@@ -1844,12 +1862,6 @@ export class Viewer {
         };
 
     }();
-    someFunctionThatUsesRaypoint(originCursor) {
-        if (this.controls && typeof this.controls.raypoint === 'function') {
-            // OrbitControls의 raypoint 함수에 origin 값을 전달
-            this.controls.raypoint(originCursor);
-        }
-    }
 
     updateInfoPanel = function() {
 
@@ -2127,3 +2139,4 @@ export class Viewer {
         return navigator.userAgent.includes('Mobi');
     }
 }
+
